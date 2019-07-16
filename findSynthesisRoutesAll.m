@@ -8,6 +8,9 @@ function findSynthesisRoutesAll(d, rpair_reaction_map, stoichiometric_matrix, be
      % reaction variables
      z = numArcs+1:numArcs+numReactions;
      
+	% variable with value of flux for each reaction
+     v = numArcs + numReactions+1:numArcs+2*numReactions;
+     
      s=[];
 
     cplex.Model.sense = 'minimize';
@@ -28,8 +31,10 @@ function findSynthesisRoutesAll(d, rpair_reaction_map, stoichiometric_matrix, be
 
         x = cplex.Solution.x;
         save(['solution' int2str(n)], 'x');
-        
-        
+        if isequal(x,xold)
+            save(['cplex_same_solution_' int2str(n)], 'cplex');
+            return
+        end
         us = find(x(u)>0.001);
         zs = find(x(z)>0.001);
 
@@ -99,11 +104,20 @@ function findSynthesisRoutesAll(d, rpair_reaction_map, stoichiometric_matrix, be
         
         combMat = [combMat{:}];
         
-        tmp = spalloc(size(combMat,1),length(cplex.Model.A(1,:)),numel(us));
+        if (size(combMat,1)) > 1
+            disp('mehr als eine Zeile')
+        end
         
-        tmp(z(combMat))=1;
+        tmp = spalloc(size(combMat,1),length(cplex.Model.A(1,:)),numel(us));
+        indices = sub2ind(size(tmp),repmat((1:size(combMat,1))',1,size(combMat,2)),z(combMat));
+        tmp(indices)=1;
         tmp(:,curSol)=numReactions;
-        cplex.addRows(-Inf, tmp,size(combMat,2)-1+numReactions);
+        
+        %calculate number of unique reactions on path
+        lens = cellfun(@(row) length(unique(row)),num2cell(combMat,2));
+        %lens = lens.';
+        %cplex.addRows(-Inf, tmp,lens-1+numReactions);
+        cplex.addRows(ones(numel(lens),1)*-Inf, tmp,lens-1+numReactions);
         
         clear tmp;
         
